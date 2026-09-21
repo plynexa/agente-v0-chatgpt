@@ -8,15 +8,15 @@ se torna outra fonte de verdade.
 O agente inicia e mantém as funções locais sem OpenAI, Anthropic, Google ou
 qualquer chave externa. Providers futuros são ferramentas opcionais.
 
-## Status desta release
+## Status desta release — V0.3
 
-- 20 testes automatizados: 20 passaram, 0 falharam.
+- 31 testes automatizados: 31 passaram, 0 falharam.
 - Android: `SOURCE_BUILD_PASS`; APK debug criado e lint aprovado.
-- Desktop: `SOURCE_BUILD_PASS`; distribuição Linux criada.
-- Windows `.exe`: `WINDOWS_EXE_NOT_BUILT_ENVIRONMENT_LIMITATION` — a tarefa foi
-  tentada e corretamente ignorada pelo Compose no host Linux.
-- Galaxy S10, áudio real, Wi-Fi real e DPAPI no Windows:
-  `UNTESTED_ON_REAL_DEVICE`.
+- Desktop: `SOURCE_BUILD_PASS`; cliente Compose compilado.
+- Windows `.exe`: `WINDOWS_EXE_NOT_BUILT_ENVIRONMENT_LIMITATION` — EXE/MSI estão
+  configurados, mas só podem ser gerados e validados em um host Windows.
+- O pareamento REST anterior foi exercitado em S10/Windows; a instalação e o
+  fluxo completo da V0.3 ainda são `UNTESTED_ON_REAL_DEVICE`.
 
 Consulte [docs/TEST_MATRIX.md](docs/TEST_MATRIX.md) e
 [COMPARISON_MANIFEST.md](COMPARISON_MANIFEST.md) para a classificação completa.
@@ -35,8 +35,9 @@ Stack fixa da V0:
 ```mermaid
 flowchart TD
     S10["Galaxy S10\nAgent Host"] --> CORE["Agent Core compartilhado"]
-    CORE --> DB["SQLite\nmemória + histórico + tarefas"]
-    CORE --> LOCAL["Skills locais + voz + lembretes + backup"]
+    CORE --> RT["Conversation Runtime"]
+    RT --> DB["SQLite\nmemória + histórico + tarefas"]
+    RT --> LOCAL["Contexto + router + skills"]
     CORE --> API["REST v1 + WebSocket autenticado"]
     WIN["Windows Client"] -->|"pareamento na LAN"| API
 ```
@@ -79,10 +80,14 @@ Linux/macOS:
 Windows:
 
 ```bat
-gradlew.bat :shared:desktopTest
-gradlew.bat :androidApp:assembleDebug
-gradlew.bat :desktopApp:packageExe
+TESTAR_AGENT.bat
+COMPILAR_ANDROID.bat
+ABRIR_AGENT_WINDOWS.bat
 ```
+
+`INSTALAR_S10.bat` compila quando necessário, detecta um aparelho autorizado
+via ADB e instala/atualiza o APK. Os scripts usam apenas caminhos relativos e
+mantêm mensagens de erro visíveis.
 
 O APK debug é gerado em:
 
@@ -122,7 +127,7 @@ restart até nova abertura, conforme as regras do Android.
    ./gradlew :desktopApp:run
    ```
 
-   No Windows use `gradlew.bat :desktopApp:run` ou o `.exe` gerado no Windows.
+   No Windows use `ABRIR_AGENT_WINDOWS.bat` ou o `.exe` gerado no Windows.
 5. Abra **Configurações**, informe `http://IP-DO-S10:8787` e reconecte.
 6. Informe o nome do computador e o código exibido no S10.
 
@@ -134,9 +139,17 @@ Veja [docs/PAIRING_AND_LAN.md](docs/PAIRING_AND_LAN.md).
 ## Painel Windows
 
 O menu inclui Dashboard, Chat, Memória, Projetos, Skills, Tarefas, Lembretes,
-Histórico, Dispositivos, Modelos, Logs e Configurações. O WebSocket atualiza
+Histórico, Dispositivos, Modelos, Logs e Configurações. Na V0.3 é possível criar,
+renomear, trocar e apagar conversas; editar/apagar memórias; cadastrar lembretes
+com data e hora; editar/apagar lembretes; e revogar dispositivos. O WebSocket atualiza
 atividade ao vivo; após queda de rede, o cliente reconecta e recupera o estado
 autoritativo por REST.
+
+No Chat, Enter envia e Shift+Enter insere uma nova linha. A interface não possui
+um cérebro próprio: envia ao S10, que executa o runtime e devolve a resposta.
+O botão **Localizar S10 automaticamente** procura o host na rede local quando o
+endereço IP muda. O identificador do Windows é estável, evitando criar um novo
+dispositivo a cada pareamento da mesma instalação.
 
 Veja [docs/WINDOWS_CLIENT.md](docs/WINDOWS_CLIENT.md).
 
@@ -173,6 +186,33 @@ Memórias: `WORKING`, `EPISODIC`, `SEMANTIC`, `PROJECT`, `PREFERENCE`,
 LLM local são opcionais futuros. O histórico original nunca é substituído por
 resumos.
 
+## Conversation Runtime V0.3
+
+Toda entrada textual segue uma única implementação no host:
+
+```text
+entrada -> conversa -> contexto -> memória/projetos -> router/skill -> resposta
+        -> persistência -> eventos -> cliente
+```
+
+O runtime responde localmente a fatos como “Quem é Yasmin?”, resolve relações
+como `Airfry belongs_to Trendo`, mantém referências recentes como “ela/isso”,
+cria lembretes pelo router e informa claramente quando falta um provider. Tanto
+a mensagem do usuário quanto a resposta ficam na mesma conversa SQLite.
+
+A V0.3 também captura frases naturais como “Belinha é o nome da minha
+cachorrinha” ou “Eu tenho duas cachorras”, confirma o salvamento e permite
+consultar, editar ou excluir a memória pelo painel.
+
+## Sincronização em nuvem
+
+A V0.3 contém um contrato e coordenador testados para sincronização bidirecional,
+mas ainda não possui um serviço de nuvem configurado. Portanto, a nuvem **não é
+a fonte principal nesta entrega**: o SQLite do S10 continua autoritativo e
+offline. Endpoint, autenticação, conflitos, tombstones e agendamento ainda
+precisam ser implementados com o provedor escolhido. Veja
+[docs/CLOUD_SYNC.md](docs/CLOUD_SYNC.md).
+
 ## Tarefas, skills e providers
 
 A fila possui dois workers supervisionados no host Android. Tarefas longas não
@@ -183,6 +223,11 @@ Skills V0: Memory, Reminder, System Status e Echo. O router resolve status,
 memória, lembretes e tarefas localmente. `MockAIProvider` é funcional apenas
 para testes. OpenAI, Anthropic, Gemini, modelo local e imagem são contratos não
 configurados; nenhuma chave é necessária para iniciar.
+
+Na tela Modelos é possível cadastrar manualmente nome, URL, modelo e chave de
+um provider. No Android a chave fica em armazenamento criptografado e nunca é
+devolvida pela API. Esse cadastro é `PARTIAL`: a execução real desses providers
+ainda não foi conectada ao runtime.
 
 ## Lembretes
 
@@ -224,13 +269,15 @@ host Android.
 
 ## Limitações honestas
 
-- Nenhum Galaxy S10 estava conectado ao ambiente de build.
+- O APK V0.3 foi construído sem um Galaxy S10 conectado ao ambiente de build;
+  sua instalação e o fluxo físico atualizado ainda precisam ser repetidos.
 - Wake word/STT/TTS, notificações, restart, bateria, backup Android e Wi-Fi real
   ainda precisam de teste físico.
 - O Windows `.exe` não foi gerado nem validado porque a construção ocorreu em
   Linux. O código Desktop e uma distribuição Linux foram compilados.
 - DPAPI compila, mas precisa de execução em Windows.
-- Providers externos, modelo local grande, embeddings, cloud sync, Alexa,
+- Execução de providers externos, modelo local grande, embeddings, cloud sync
+  real, Alexa,
   WhatsApp, smart home, GitHub, Cloudflare e geração real de imagem não fazem
   parte da V0.
 - A V0 é single-user/local-LAN, não um produto multiusuário comercial.

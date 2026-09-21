@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import com.plynexa.agent.android.notification.AndroidReminderNotificationAdapter
 import com.plynexa.agent.android.backup.AndroidLocalBackupProvider
 import com.plynexa.agent.android.security.AndroidSecretStore
+import com.plynexa.agent.android.security.AndroidProviderConfigurationStore
 import com.plynexa.agent.android.voice.AndroidLocalTextToSpeechEngine
 import com.plynexa.agent.android.voice.AndroidOnDeviceSpeechEngine
 import com.plynexa.agent.core.agent.AgentCore
@@ -16,6 +17,7 @@ import com.plynexa.agent.core.api.HostApiServices
 import com.plynexa.agent.core.api.configureHostApi
 import com.plynexa.agent.core.conversation.ConversationManager
 import com.plynexa.agent.core.conversation.SqlDelightConversationRepository
+import com.plynexa.agent.core.context.ContextManager
 import com.plynexa.agent.core.events.InMemoryEventBus
 import com.plynexa.agent.core.device.PairingManager
 import com.plynexa.agent.core.device.PlatformSecureTokenGenerator
@@ -30,6 +32,7 @@ import com.plynexa.agent.core.reminder.ReminderManager
 import com.plynexa.agent.core.reminder.SqlDelightReminderRepository
 import com.plynexa.agent.core.project.ProjectManager
 import com.plynexa.agent.core.project.SqlDelightProjectRepository
+import com.plynexa.agent.core.runtime.DefaultConversationRuntime
 import com.plynexa.agent.core.skill.EchoSkill
 import com.plynexa.agent.core.skill.MemorySkill
 import com.plynexa.agent.core.skill.ReminderSkill
@@ -95,14 +98,14 @@ class AndroidAgentRuntime(
     private val driver = AndroidSqliteDriver(AgentDatabase.Schema, appContext, "agent-v0.db")
     private val database = AgentDatabase(driver)
     private val secretStore = AndroidSecretStore(appContext)
+    private val providerConfigurations = AndroidProviderConfigurationStore(secretStore)
     private val tokenGenerator = PlatformSecureTokenGenerator()
     private val serverSecret = secretStore.get(KEY_SERVER_SECRET) ?: tokenGenerator.token().also {
         secretStore.put(KEY_SERVER_SECRET, it)
     }
     private var lanEnabled = initialLanEnabled
-    private val conversations = ConversationManager(
-        SqlDelightConversationRepository(database), events, ids, clock,
-    )
+    private val conversationRepository = SqlDelightConversationRepository(database)
+    private val conversations = ConversationManager(conversationRepository, events, ids, clock)
     private val stateStore = AgentStateStore(events, ids, clock)
     val core = AgentCore(stateStore, conversations, scope)
     val memories = MemoryManager(SqlDelightMemoryRepository(database), events, ids, clock)
@@ -111,6 +114,17 @@ class AndroidAgentRuntime(
     val reminders = ReminderManager(
         SqlDelightReminderRepository(database), events, ids, clock,
         AndroidReminderNotificationAdapter(appContext),
+    )
+    val conversationRuntime = DefaultConversationRuntime.create(
+        core = core,
+        contextManager = ContextManager(conversationRepository),
+        memoryManager = memories,
+        projectManager = projects,
+        taskManager = tasks,
+        reminderManager = reminders,
+        eventBus = events,
+        idGenerator = ids,
+        timeProvider = clock,
     )
     private val speech = AndroidOnDeviceSpeechEngine(appContext)
     private val tts = AndroidLocalTextToSpeechEngine(appContext)
@@ -245,9 +259,10 @@ class AndroidAgentRuntime(
 
     private fun startServer(bindLan: Boolean = lanEnabled) {
         val services = HostApiServices(
-            core, events, memories, tasks, reminders,
+            core, conversationRuntime, events, memories, tasks, reminders,
             projectManager = projects, skills = skills,
             pairingManager = pairing, backupProvider = backups,
+            providerConfigurations = providerConfigurations,
         )
         server = embeddedServer(
             factory = CIO,
@@ -286,34 +301,22 @@ class AndroidAgentRuntime(
     }
 
     private suspend fun processVoiceTranscript(transcript: String) {
-        voice.onFinalTranscript(transcript)
-        if (transcript.trim().equals("Agente standby", ignoreCase = true)) {
-            conversations.appendUserMessage(defaultConversationId, transcript, MessageSource.VOICE, "android-host")
-            conversations.appendAgentMessage(defaultConversationId, "Entrando em standby.", MessageSource.VOICE, "android-host")
-            voice.standby()
-            return
-        }
-        voice.beginProcessing()
-        core.receiveChat(defaultConversationId, transcript, "android-host")
-        val answer = localVoiceAnswer(transcript)
-        conversations.appendAgentMessage(defaultConversationId, answer, MessageSource.VOICE, "android-host")
-        voice.speak(answer)
-    }
-
-    private suspend fun localVoiceAnswer(transcript: String): String {
-        val normalized = transcript.lowercase()
-        return when {
-            normalized.contains("status do agente") -> "O agente está funcionando localmente."
-            normalized.startsWith("quem é ") -> {
-                val query = transcript.substringAfter(" ").trim().removeSuffix("?")
-                memories.search(query, 1).firstOrNull()?.memory?.content
-                    ?: "Não encontrei essa informação na memória local."
+        runCatching {
+            voice.onFinalTranscript(transcript)
+            if (transcript.trim().equals("Agente standby", ignoreCase = true)) {
+                conversations.appendUserMessage(defaultConversationId, transcript, MessageSource.VOICE, "android-host")
+                conversations.appendAgentMessage(defaultConversationId, "Entrando em standby.", MessageSource.VOICE, "android-host")
+                voice.standby()
+                return
             }
-            normalized.contains("tarefas abertas") -> {
-                val open = tasks.tasks().count { it.finishedAt == null }
-                "Você tem $open tarefas abertas."
-            }
-            else -> "Mensagem registrada localmente."
+            voice.beginProcessing()
+            val result = conversationRuntime.process(
+                defaultConversationId, transcript, MessageSource.VOICE, "android-host",
+            )
+            voice.speak(result.replyMessage.content)
+        }.onFailure { error ->
+            voice.fail(error::class.simpleName ?: "ConversationRuntimeError")
+            AgentHostState.update { it.copy(error = error.message, statusText = "Erro no Agent Host") }
         }
     }
 

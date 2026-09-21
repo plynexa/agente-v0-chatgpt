@@ -14,6 +14,11 @@ owns:
 - the Ktor REST/WebSocket server on port `8787`;
 - Voice Manager, Android offline speech recognition and Android TTS.
 
+Both API chat and recognized voice text enter the shared
+`AgentConversationRuntime`. It persists the two sides of the turn, resolves
+recent context/memory/project relations, routes local actions and emits events;
+the Android activity and voice adapter contain no independent response brain.
+
 Closing the activity does not stop the service. The notification exposes
 standby, microphone-off and stop actions. Stopping the service closes the API,
 task workers, voice engines and database in order.

@@ -111,3 +111,39 @@ Statuses: `[ ]` pending, `[~]` partial/blocked, `[x]` evidenced complete.
 - [~] Physical S10 ↔ Windows REST pairing works; validate the corrected real WebSocket URL.
 - [~] Build and validate native Windows `.exe` and DPAPI token persistence.
 - [~] Resolve unavailable Android on-device speech service on the tested Galaxy S10.
+
+## V0.2 — Unified Conversation Runtime
+
+- [x] Add one authoritative runtime for chat and transcribed voice input.
+- [x] Integrate conversation, context, memory, projects, router, tasks and reminders.
+- [x] Persist user/reply pairs in the same conversation with route/context metadata.
+- [x] Add useful local answers and explicit missing-provider responses.
+- [x] Route Android voice transcripts and Windows/API chat through the runtime.
+- [x] Add Enter to send and Shift+Enter for a new line on Windows.
+- [x] Add Windows launcher, test, Android build and ADB install scripts.
+- [x] Add eight required scenarios plus truthful event-lifecycle coverage.
+- [x] Build/lint the V0.2 APK and compile the Desktop client.
+- [~] Install V0.2 on the S10 and validate the full physical conversation flow.
+- [~] Build and validate the native Windows `.exe` on Windows.
+
+## V0.3 — Usability, natural memory and portability
+
+- [x] Capture ordinary first-person/declarative facts from chat into memory.
+- [x] Improve Portuguese memory retrieval and perspective-aware local answers.
+- [x] Add memory edit/delete API and Windows card actions.
+- [x] Add conversation create/select/rename/delete in the Windows client.
+- [x] Add reminder date/time creation, edit and delete controls.
+- [x] Give each Windows installation a persistent device id and prevent duplicate
+  rows when the same client is paired again.
+- [x] Add device revocation and automatic S10 discovery on the local subnet.
+- [x] Load independent dashboard resources concurrently and debounce event refresh.
+- [x] Add encrypted Android provider configuration and Windows configuration UI.
+- [x] Configure Compose Desktop 0.3.0 EXE/MSI tasks and one-click batch scripts.
+- [x] Add provider-neutral cloud sync contracts/coordinator and automated test.
+- [~] Connect saved provider configurations to real AI inference.
+- [~] Add a safe install/configure lifecycle for third-party skills; V0.3 keeps
+  the four executable built-in skills instead of creating inert fake plugins.
+- [~] Deploy and bind a real authenticated cloud sync provider; SQLite remains
+  authoritative until conflict/retry/security behavior is validated.
+- [~] Generate and validate native EXE/MSI on a Windows host.
+- [~] Install V0.3 on the Galaxy S10 and validate the physical end-to-end flow.

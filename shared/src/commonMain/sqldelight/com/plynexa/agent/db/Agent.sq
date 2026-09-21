@@ -1,0 +1,415 @@
+CREATE TABLE conversations (
+    id TEXT NOT NULL PRIMARY KEY,
+    title TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    active_project_id TEXT,
+    metadata TEXT
+);
+
+CREATE TABLE messages (
+    id TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    device_id TEXT,
+    metadata TEXT
+);
+CREATE INDEX messages_conversation_time ON messages(conversation_id, timestamp);
+CREATE INDEX messages_content ON messages(content);
+
+CREATE TABLE memories (
+    id TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    importance REAL NOT NULL DEFAULT 0.5,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    source_message_id TEXT,
+    project_id TEXT,
+    metadata TEXT
+);
+CREATE INDEX memories_content ON memories(content);
+CREATE INDEX memories_type ON memories(type);
+
+CREATE TABLE memory_relations (
+    id TEXT NOT NULL PRIMARY KEY,
+    from_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    relation_type TEXT NOT NULL,
+    to_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    weight REAL NOT NULL DEFAULT 1.0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE entities (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    aliases TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    metadata TEXT
+);
+CREATE UNIQUE INDEX entities_normalized_name ON entities(normalized_name);
+
+CREATE TABLE entity_relations (
+    id TEXT NOT NULL PRIMARY KEY,
+    from_entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    relation_type TEXT NOT NULL,
+    to_entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    metadata TEXT
+);
+
+CREATE TABLE projects (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    parent_project_id TEXT REFERENCES projects(id),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    metadata TEXT
+);
+
+CREATE TABLE project_relations (
+    id TEXT NOT NULL PRIMARY KEY,
+    from_project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    relation_type TEXT NOT NULL,
+    to_project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE tasks (
+    id TEXT NOT NULL PRIMARY KEY,
+    type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL,
+    priority INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    finished_at INTEGER,
+    progress REAL,
+    result TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    parent_task_id TEXT REFERENCES tasks(id),
+    conversation_id TEXT REFERENCES conversations(id),
+    metadata TEXT
+);
+CREATE INDEX tasks_status_priority ON tasks(status, priority, created_at);
+
+CREATE TABLE task_events (
+    id TEXT NOT NULL PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    details TEXT
+);
+
+CREATE TABLE skills (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    description TEXT NOT NULL,
+    capabilities TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    configuration_schema TEXT,
+    installed_at INTEGER NOT NULL
+);
+
+CREATE TABLE skill_permissions (
+    skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    permission TEXT NOT NULL,
+    level TEXT NOT NULL,
+    PRIMARY KEY(skill_id, permission)
+);
+
+CREATE TABLE reminders (
+    id TEXT NOT NULL PRIMARY KEY,
+    text TEXT NOT NULL,
+    trigger_at INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    conversation_id TEXT REFERENCES conversations(id),
+    created_at INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    metadata TEXT
+);
+CREATE INDEX reminders_due ON reminders(status, trigger_at);
+
+CREATE TABLE devices (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    last_seen INTEGER,
+    status TEXT NOT NULL,
+    capabilities TEXT NOT NULL,
+    paired_at INTEGER,
+    token_hash TEXT,
+    metadata TEXT
+);
+
+CREATE TABLE settings (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    sensitive INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE provider_usage (
+    id TEXT NOT NULL PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    capability TEXT NOT NULL,
+    requested_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    status TEXT NOT NULL,
+    estimated_cost REAL,
+    metadata TEXT
+);
+
+CREATE TABLE audit_logs (
+    id TEXT NOT NULL PRIMARY KEY,
+    timestamp INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    actor_id TEXT,
+    device_id TEXT,
+    target_type TEXT,
+    target_id TEXT,
+    result TEXT NOT NULL,
+    details TEXT
+);
+CREATE INDEX audit_logs_time ON audit_logs(timestamp);
+
+CREATE TABLE backups (
+    id TEXT NOT NULL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    path TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    checksum TEXT NOT NULL,
+    status TEXT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    metadata TEXT
+);
+
+CREATE TABLE schema_metadata (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+insertSchemaMetadata:
+INSERT OR REPLACE INTO schema_metadata(key, value) VALUES (?, ?);
+
+selectSchemaMetadata:
+SELECT value FROM schema_metadata WHERE key = ?;
+
+insertConversation:
+INSERT INTO conversations(id, title, created_at, updated_at, active_project_id, metadata)
+VALUES (?, ?, ?, ?, ?, ?);
+
+selectConversationById:
+SELECT * FROM conversations WHERE id = ?;
+
+selectConversations:
+SELECT * FROM conversations ORDER BY updated_at DESC;
+
+touchConversation:
+UPDATE conversations SET updated_at = ? WHERE id = ?;
+
+updateConversation:
+UPDATE conversations SET title = ?, updated_at = ?, metadata = ? WHERE id = ?;
+
+deleteConversation:
+DELETE FROM conversations WHERE id = ?;
+
+insertMessage:
+INSERT INTO messages(id, conversation_id, role, content, timestamp, source, device_id, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectMessageById:
+SELECT * FROM messages WHERE id = ?;
+
+selectMessagesForConversation:
+SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC, id ASC;
+
+selectRecentMessagesForConversation:
+SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC, id DESC LIMIT ?;
+
+searchMessages:
+SELECT * FROM messages
+WHERE content LIKE '%' || ? || '%' COLLATE NOCASE
+ORDER BY timestamp DESC
+LIMIT ?;
+
+insertMemory:
+INSERT INTO memories(id, type, content, importance, created_at, updated_at, source_message_id, project_id, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectMemoryById:
+SELECT * FROM memories WHERE id = ?;
+
+selectMemoriesByText:
+SELECT * FROM memories
+WHERE content LIKE '%' || ? || '%' COLLATE NOCASE
+ORDER BY updated_at DESC
+LIMIT ?;
+
+selectAllMemories:
+SELECT * FROM memories ORDER BY updated_at DESC;
+
+updateMemory:
+UPDATE memories
+SET type = ?, content = ?, importance = ?, updated_at = ?, project_id = ?, metadata = ?
+WHERE id = ?;
+
+deleteMemory:
+DELETE FROM memories WHERE id = ?;
+
+insertEntity:
+INSERT INTO entities(id, name, normalized_name, type, aliases, created_at, updated_at, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectEntityById:
+SELECT * FROM entities WHERE id = ?;
+
+selectEntityByNormalizedName:
+SELECT * FROM entities WHERE normalized_name = ?;
+
+selectEntitiesByText:
+SELECT * FROM entities
+WHERE normalized_name LIKE '%' || ? || '%' COLLATE NOCASE
+   OR aliases LIKE '%' || ? || '%' COLLATE NOCASE
+ORDER BY updated_at DESC;
+
+insertEntityRelation:
+INSERT INTO entity_relations(id, from_entity_id, relation_type, to_entity_id, created_at, metadata)
+VALUES (?, ?, ?, ?, ?, ?);
+
+selectEntityRelationsForEntity:
+SELECT * FROM entity_relations
+WHERE from_entity_id = ? OR to_entity_id = ?
+ORDER BY created_at ASC;
+
+insertProject:
+INSERT INTO projects(id, name, description, status, parent_project_id, created_at, updated_at, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectProjectById:
+SELECT * FROM projects WHERE id = ?;
+
+selectProjectByName:
+SELECT * FROM projects WHERE name = ? COLLATE NOCASE;
+
+selectProjects:
+SELECT * FROM projects ORDER BY updated_at DESC;
+
+insertProjectRelation:
+INSERT INTO project_relations(id, from_project_id, relation_type, to_project_id, created_at)
+VALUES (?, ?, ?, ?, ?);
+
+selectProjectRelationsForProject:
+SELECT * FROM project_relations
+WHERE from_project_id = ? OR to_project_id = ?
+ORDER BY created_at ASC;
+
+insertTask:
+INSERT INTO tasks(id, type, description, status, priority, created_at, started_at, finished_at,
+                  progress, result, error, attempts, parent_task_id, conversation_id, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectTaskById:
+SELECT * FROM tasks WHERE id = ?;
+
+selectTasks:
+SELECT * FROM tasks ORDER BY created_at DESC;
+
+selectTasksByStatus:
+SELECT * FROM tasks WHERE status = ? ORDER BY priority DESC, created_at ASC;
+
+updateTaskState:
+UPDATE tasks
+SET status = ?, started_at = ?, finished_at = ?, progress = ?, result = ?, error = ?, attempts = ?
+WHERE id = ?;
+
+insertTaskEvent:
+INSERT INTO task_events(id, task_id, event_type, timestamp, details)
+VALUES (?, ?, ?, ?, ?);
+
+selectTaskEvents:
+SELECT * FROM task_events WHERE task_id = ? ORDER BY timestamp ASC, id ASC;
+
+insertReminder:
+INSERT INTO reminders(id, text, trigger_at, status, conversation_id, created_at, source, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectReminderById:
+SELECT * FROM reminders WHERE id = ?;
+
+selectReminders:
+SELECT * FROM reminders ORDER BY trigger_at ASC;
+
+selectRemindersByStatus:
+SELECT * FROM reminders WHERE status = ? ORDER BY trigger_at ASC;
+
+selectDueReminders:
+SELECT * FROM reminders WHERE status = 'SCHEDULED' AND trigger_at <= ? ORDER BY trigger_at ASC;
+
+updateReminderStatus:
+UPDATE reminders SET status = ? WHERE id = ?;
+
+updateReminder:
+UPDATE reminders SET text = ?, trigger_at = ?, status = ?, conversation_id = ?, metadata = ? WHERE id = ?;
+
+deleteReminder:
+DELETE FROM reminders WHERE id = ?;
+
+upsertDevice:
+INSERT OR REPLACE INTO devices(id, name, type, last_seen, status, capabilities, paired_at, token_hash, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectDeviceById:
+SELECT * FROM devices WHERE id = ?;
+
+selectDeviceByTokenHash:
+SELECT * FROM devices WHERE token_hash = ? LIMIT 1;
+
+selectDevices:
+SELECT * FROM devices ORDER BY paired_at DESC, name ASC;
+
+updateDeviceSeen:
+UPDATE devices SET last_seen = ?, status = 'ONLINE' WHERE id = ?;
+
+revokeDevice:
+UPDATE devices SET status = 'REVOKED', token_hash = NULL WHERE id = ?;
+
+deleteDevice:
+DELETE FROM devices WHERE id = ?;
+
+upsertSetting:
+INSERT OR REPLACE INTO settings(key, value, updated_at, sensitive) VALUES (?, ?, ?, ?);
+
+selectSetting:
+SELECT * FROM settings WHERE key = ?;
+
+selectSettings:
+SELECT * FROM settings WHERE sensitive = 0 ORDER BY key ASC;
+
+deleteSetting:
+DELETE FROM settings WHERE key = ?;
+
+insertBackup:
+INSERT INTO backups(id, provider, path, created_at, size_bytes, checksum, status, schema_version, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectBackupById:
+SELECT * FROM backups WHERE id = ?;
+
+selectBackups:
+SELECT * FROM backups ORDER BY created_at DESC;
+
+insertAuditLog:
+INSERT INTO audit_logs(id, timestamp, action, actor_id, device_id, target_type, target_id, result, details)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);

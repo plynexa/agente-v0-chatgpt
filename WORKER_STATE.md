@@ -4,21 +4,26 @@ STATUS:
 IN_PROGRESS
 
 CURRENT_PHASE:
-POST-V0 — REAL DEVICE VALIDATION
+V0.3 — USABILITY, NATURAL MEMORY AND PORTABILITY / DEVICE VALIDATION
 
 LAST_SUCCESSFUL_STEP:
-Installed the V0 APK on a Galaxy S10 and paired the Windows client over real
-Wi-Fi. Authenticated REST state recovery works and reports the S10 online.
+Implemented and validated V0.3 natural memory capture, conversation/memory/
+reminder CRUD, stable device pairing identity, automatic LAN discovery,
+parallel/debounced Desktop loading, encrypted provider configuration and the
+provider-neutral cloud sync foundation. All 31 shared tests pass; Desktop
+compilation, Android debug APK assembly and Android lint pass.
 
 CURRENT_PROBLEM:
-Real CIO WebSocket remained in RECONNECTING because AgentRemoteClient passed an
-HTTP URL to the WebSocket client. The S10 also reports that Android on-device
-speech recognition is unavailable; this voice limitation is not yet resolved.
+The V0.3 APK and Windows client have not yet been executed together on the real
+devices. Native EXE/MSI packaging requires Windows. Cloud sync has a tested
+contract/coordinator but no deployed authenticated provider. The tested S10
+previously reported that Android on-device speech recognition is unavailable.
 
 NEXT_STEP:
-Validate the HTTP-to-WS URL correction with automated tests, issue a new source
-test package, run it on Windows, and confirm the live-event indicator changes
-from RECONNECTING to CONNECTED before investigating the S10 speech service.
+On Windows run GERAR_EXE_WINDOWS.bat, install the new V0.3 APK with
+INSTALAR_S10.bat, pair once, verify the Dashboard reports Core v0.3, then test
+natural Belinha/Safira memory, memory edit/delete, new/renamed conversations,
+manual reminder edit/delete, S10 auto-discovery and device deduplication.
 
 FILES_CHANGED:
 - Project root Gradle configuration and version catalog
@@ -41,10 +46,15 @@ FILES_CHANGED:
 - Phase 10 one-time pairing, token authorization, LAN lifecycle and DPAPI store
 - Phase 11 A–M evidence matrix, explicit Test J and Android backup binding
 - Phase 12 release README, final classifications and checksummed artifacts
+- V0.2 unified conversation runtime, runtime/API/voice integration, conversation
+  lifecycle events, Windows Enter behavior and local development scripts
+- V0.3 natural memory capture/retrieval, conversation/memory/reminder CRUD,
+  stable device identity, LAN discovery, provider configuration, optimized
+  Desktop refresh, cloud sync foundation and Windows EXE/MSI build scripts
 
 TESTS_LAST_RUN:
-- Environment probe: PASS (Java 17 and Git available)
-- `:shared:desktopTest`: PASS (20 tests, 0 failures, 0 skipped)
+- Local JDK 17 and official Android SDK: PASS
+- `:shared:desktopTest`: PASS (31 tests, 0 failures, 0 skipped)
 - `:desktopApp:compileKotlinDesktop`: PASS
 - SQLDelight code generation: PASS
 - `:androidApp:assembleDebug`: PASS
@@ -53,13 +63,15 @@ TESTS_LAST_RUN:
 - Desktop remote-client chat/memory integration: PASS
 - Test K authenticated pairing/chat/events/reconnect: PASS
 - Test J no-external-key local feature integration: PASS
-- `:desktopApp:createDistributable`: PASS (Linux application image)
-- `:desktopApp:packageExe`: SKIPPED (Linux host; no `.exe` claimed)
+- `:desktopApp:packageExe` / `packageMsi`: configured; target build pending on Windows
+- V0.3 APK SHA-256:
+  `4621a2660ff16a85bbc1039ea7ebf96d90a458c423ea766cc89a8decfa3f7737`
 
 KNOWN_BLOCKERS:
-- No Galaxy S10 real-device validation is possible here; Android runtime and
-  acoustic behavior are `UNTESTED_ON_REAL_DEVICE`.
+- V0.3 device flow is `UNTESTED_ON_REAL_DEVICE` in this build environment.
 - Android on-device wake/STT requires API 31+ and an installed offline language
-  recognizer; target-device availability is unconfirmed.
+  recognizer; the tested S10 previously reported it unavailable.
 - Windows `.exe` packaging cannot be validated on this Linux environment.
 - Android backup snapshot/restore source is `UNTESTED_ON_REAL_DEVICE`.
+- Real cloud database sync is `PARTIAL`: provider selection, deployment,
+  authentication, conflict resolution and Android scheduling remain pending.

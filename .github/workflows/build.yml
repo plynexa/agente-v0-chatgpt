@@ -1,0 +1,100 @@
+name: Build and test V0.3
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Shared tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run shared tests
+        run: ./gradlew --no-daemon :shared:desktopTest
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-test-reports
+          path: shared/build/reports/tests/
+          if-no-files-found: warn
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and lint Android
+        run: ./gradlew --no-daemon :androidApp:assembleDebug :androidApp:lintDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-v0.3-android-debug
+          path: androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - name: Upload Android lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: androidApp/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+
+  windows-desktop:
+    name: Windows desktop packages
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build EXE and MSI
+        shell: cmd
+        run: gradlew.bat --no-daemon :desktopApp:packageExe :desktopApp:packageMsi
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-v0.3-windows
+          path: |
+            desktopApp/build/compose/binaries/main/exe/*.exe
+            desktopApp/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+
+  release:
+    name: GitHub release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tests, android, windows-desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-v0.3-*
+          path: release-artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+          generate_release_notes: true

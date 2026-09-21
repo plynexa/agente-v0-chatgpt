@@ -10,6 +10,8 @@ local.properties
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
 backups/
 secrets/
 *.log

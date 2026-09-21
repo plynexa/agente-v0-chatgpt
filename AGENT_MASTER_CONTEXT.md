@@ -26,7 +26,8 @@ Flow + SQLDelight/SQLite + Ktor. See `docs/ARCHITECTURE.md`.
 
 1. This project is independent; do not import code from any competing/previous
    implementation.
-2. Android/S10 is the production source of truth. Windows is a client.
+2. Android/S10 is the current production source of truth. Windows is a client.
+   A future cloud authority must preserve a complete offline SQLite replica.
 3. Preserve every original message; never replace full history with summaries.
 4. Local features work without external AI keys.
 5. Long tasks cannot block chat or the main UI thread.
@@ -43,8 +44,10 @@ Flow + SQLDelight/SQLite + Ktor. See `docs/ARCHITECTURE.md`.
 - A local LLM is optional behind `LocalModelProvider`; V0 boot cannot require it.
 - SQLite is the durable host database. JSON is only flexible metadata.
 - Voice, chat, and remote client messages enter the same conversation history.
-- Backup and device sync are distinct. V0 implements local backup and LAN access;
-  cloud sync remains future work.
+- All textual inputs enter `AgentConversationRuntime`; Android, Windows and
+  transcribed voice never implement independent response logic.
+- Backup and device sync are distinct. V0.3 adds a tested provider-neutral cloud
+  sync coordinator, but no real cloud provider is configured or authoritative.
 - Wake word, STT, and TTS stay behind replaceable contracts.
 
 ## Critical files
@@ -93,6 +96,17 @@ Flow + SQLDelight/SQLite + Ktor. See `docs/ARCHITECTURE.md`.
 - Phase 12: source V0 release documentation and artifacts completed. The
   repository is `V0_COMPLETE` for tested source scope; target-device limitations
   remain classifications, not hidden claims.
+- V0.2: `AgentConversationRuntime` integrates conversation persistence, recent
+  context, memory/entity/project retrieval, the local-first router, tasks,
+  reminders and truthful lifecycle events. Windows chat and Android voice use
+  this single pipeline; 29 automated tests pass and Android APK/lint pass.
+- V0.3: natural declarative facts are saved by chat; memories, conversations and
+  reminders have edit/delete lifecycle APIs and Windows controls; the Desktop
+  client has a stable identity, LAN host discovery and parallel/debounced state
+  loading; provider credentials can be stored encrypted on Android; cloud sync
+  has a tested provider-neutral foundation. 31 automated tests pass, Android
+  APK/lint pass and Desktop source compiles. Real cloud sync/provider execution,
+  the Windows native installer and physical V0.3 device flow remain pending.
 
 ## Continuation protocol
 

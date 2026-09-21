@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-09-20 — V0.3 usability, natural memory and portability
+
+### Added
+
+- Natural chat capture for common Portuguese facts such as names, possessions
+  and personal statements, with useful confirmation and retrieval.
+- Conversation create/select/rename/delete, memory edit/delete and complete
+  reminder date/time/edit/delete flows in the Windows client.
+- Stable Windows device identity, device revocation and automatic S10 discovery
+  when its LAN IP changes.
+- Encrypted Android provider configuration API and Windows Models form.
+- Provider-neutral two-way cloud sync contracts/coordinator and automated test.
+- Compose Desktop EXE/MSI tasks plus one-click launch/package scripts.
+
+### Changed
+
+- Memory search now removes Portuguese stop words and ranks the complete local
+  memory set, improving queries that do not repeat the exact stored sentence.
+- Desktop startup fetches independent resources concurrently and live event
+  refreshes are debounced; chat updates use the returned messages immediately.
+- Windows logs now translate common events into readable Portuguese and show
+  relevant event metadata instead of only raw enum identifiers.
+- Desktop package metadata is now version 0.3.0.
+
+### Validation
+
+- `:shared:desktopTest`: 31 passed, 0 failed, 0 skipped.
+- `:desktopApp:compileKotlinDesktop`: passed.
+- `:androidApp:assembleDebug` and `:androidApp:lintDebug`: passed.
+- Native EXE/MSI and the physical Galaxy S10 flow remain target-environment
+  validations; no Windows binary or real cloud service is falsely claimed.
+
 ## 2026-09-16 — Real-device validation follow-up
 
 - Confirmed authenticated REST pairing between the Galaxy S10 host and Windows
@@ -281,3 +313,31 @@ evidence-based and may be downgraded when verification is unavailable.
 - Windows `.exe` task was attempted and skipped on Linux; no `.exe` claim.
 - Source-build V0 status is `V0_COMPLETE` with real-device features still
   explicitly `UNTESTED_ON_REAL_DEVICE` where applicable.
+
+## 2026-09-20 — V0.2 Unified Conversation Runtime
+
+### Added
+
+- Central `AgentConversationRuntime` shared by authenticated API chat and
+  transcribed Android voice.
+- Deterministic fact capture/retrieval, project relation resolution, recent
+  pronoun context, reminder routing and explicit missing-provider responses.
+- Real conversation lifecycle events for received/persisted messages, context,
+  memory search, selected route and created response.
+- Nine runtime tests covering all eight requested scenarios and event evidence.
+- Windows scripts to open/test the client, compile Android and install by ADB.
+
+### Changed
+
+- Removed the API and voice-specific reply paths; interfaces now use the same
+  persistent runtime and conversation.
+- Windows chat sends with Enter and inserts a new line with Shift+Enter.
+- Compose Desktop distribution metadata now identifies release 0.2.0.
+
+### Validation
+
+- `:shared:desktopTest`: 29 passed, 0 failed, 0 skipped.
+- `:desktopApp:compileKotlinDesktop`: passed.
+- `:androidApp:assembleDebug` and `:androidApp:lintDebug`: passed.
+- `:desktopApp:packageExe`: attempted and `SKIPPED` on Linux as expected.
+- V0.2 physical S10/Windows execution remains pending and is not claimed.
